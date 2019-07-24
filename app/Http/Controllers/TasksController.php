@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Task;  //追加
+use App\User;
 
 class TasksController extends Controller
 {
@@ -16,12 +17,20 @@ class TasksController extends Controller
     //getでtasksにアクセスされた場合の「一覧表示処理」
     public function index()
     {
-        $tasks = Task::all();
+        $data = [];
+        if (\Auth::check()) {
+            $user = \Auth::user();
+            $tasks = $user->tasks()->orderBy('id', 'asc')->paginate(10);
+            
+            $data = [
+                'user' => $user,
+                'tasks' => $tasks,
+            ];
+        }
         
-        return view("tasks.index", [
-                "tasks" => $tasks,
-            ]);
+        return view('welcome', $data);
     }
+
 
     /**
      * Show the form for creating a new resource.
@@ -48,15 +57,17 @@ class TasksController extends Controller
     public function store(Request $request)
     {
         $this->validate($request, [
-            "status" => "required|max:10",
+            "content" => "required|max:191",
+            "status" => "required|max:10"
         ]);
         
-        $task = new Task;
-        $task->content = $request->content;
-        $task->status = $request->status;
-        $task->save();
+        $request->user()->tasks()->create([
+                "content" => $request->content,
+                "status" => $request->status,
+        ]);
         
-        return redirect("/");
+        
+        return back();
     }
 
     /**
@@ -68,11 +79,32 @@ class TasksController extends Controller
     //getでtasks/idにアクセスされた場合の「取得表示処理」
     public function show($id)
     {
-        $task = Task::find($id);
+        /**
+        $user = User::find($id);
+        $tasks = $user->tasks()->orderBy('created_at', 'desc')->paginate(10);
+
+        $data = [
+            'user' => $user,
+            'tasks' => $tasks,
+        ];
+
+        $data += $this->counts($user);
+
+        return view('tasks.show', $data);
+        **/
         
-        return view("tasks.show", [
-            "task" => $task,
-            ]);
+        $task = Task::find($id);
+
+
+        if (\Auth::id() === $task->user_id) {
+        return view('tasks.show', [
+            'task' => $task,
+        ]);
+        } else {
+            return redirect ("/");
+        }
+        
+        
     }
 
     /**
@@ -86,9 +118,13 @@ class TasksController extends Controller
     {
         $task = Task::find($id);
         
+        if (\Auth::id() === $task->user_id) {
         return view("tasks.edit", [
             "task" => $task,
             ]);
+        } else {
+            return redirect ("/");
+        }
     }
 
     /**
@@ -122,9 +158,11 @@ class TasksController extends Controller
     //deleteでmessages/idにアクセスされた場合の「削除処理」
     public function destroy($id)
     {
-        $task = Task::find($id);
-        $task->delete();
+        $task = \App\Task::find($id);
         
-        return redirect("/");
+        if (\Auth::id() === $task->user_id){
+            $task->delete();
+        }
+        return back();
     }
 }
